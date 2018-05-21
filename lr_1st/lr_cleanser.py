@@ -5,7 +5,7 @@ import csv
 import numpy as nup
 import pandas as pds
 import matplotlib.pyplot as mpl
-%matplotlib inline
+#%matplotlib inline
 from sklearn.ensemble import RandomForestRegressor, BaggingRegressor
 from nltk.stem.snowball import SnowballStemmer
 
@@ -31,9 +31,9 @@ def merge(attr):
 if __name__ == '__main__':
     # Load data with pandas
     test_data = pds.read_csv("test.csv", encoding="ISO-8859-1")
-    train_data = pd.read_csv("train.csv", encoding="ISO-8859-1")
-    attribute_data = pd.read_csv("attributes.csv", encoding="ISO-8859-1")
-    product_description_data = pd.read_csv("product_descriptions.csv", encoding="ISO-8859-1")
+    train_data = pds.read_csv("train.csv", encoding="ISO-8859-1")
+    attribute_data = pds.read_csv("attributes.csv", encoding="ISO-8859-1")
+    product_description_data = pds.read_csv("product_descriptions.csv", encoding="ISO-8859-1")
 
     train_data['search_term'] = train_data['search_term'].map(lambda x:str_stemmer(x))
     test_data['search_term'] = test_data['search_term'].map(lambda x:str_stemmer(x))
