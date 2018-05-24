@@ -2,3 +2,7 @@
 .ipynb_checkpoints
 midterm_data
 data
+stemmed_data/attributes.csv
+stemmed_data/product_descriptions.csv
+
+
