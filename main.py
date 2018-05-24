@@ -19,9 +19,9 @@ from sklearn.model_selection import cross_val_score
 # Step 1: read data
 
 # Step 1.1: read the data
-df_train = pd.read_csv('data/train.csv', encoding = "ISO-8859-1")
-df_test = pd.read_csv('data/test.csv', encoding = "ISO-8859-1")
-df_desc = pd.read_csv('data/product_descriptions.csv')
+df_train = pd.read_csv('../data/train.csv', encoding = "ISO-8859-1")
+df_test = pd.read_csv('../data/test.csv', encoding = "ISO-8859-1")
+df_desc = pd.read_csv('../data/product_descriptions.csv')
 
 # Step 1.2: Concat training dataset and testing dataset for pre-processing
 df_all = pd.concat((df_train, df_test), axis=0, ignore_index=True)
@@ -171,12 +171,13 @@ y_train = df_train['relevance'].values
 X_train = df_train.drop(['id', 'relevance'], axis=1).values
 X_test = df_test.drop(['id', 'relevance'], axis = 1).values
 
+
 # use models from sklearn: RandomForest <-- change to other model from here
 params = [1,3,5,6,7,8,9,10]
 test_scores = []
 for param in params:
     clf = RandomForestRegressor(n_estimators=30, max_depth=param)
-    test_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=5, scoring='neg_mean_squared_error'))
+    test_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
     test_scores.append(np.mean(test_score))
 
 # generate predictions
@@ -185,4 +186,52 @@ rf.fit(X_train, y_train)
 y_pred = rf.predict(X_test)
 pd.DataFrame({"id": test_ids, "relevance": y_pred}).to_csv('outputs/RF_outputs.csv',index=False)
 
+# AdaBoost
+from sklearn.ensemble import AdaBoostRegressor
+ada_scores = []
+for param in params:
+    clf = AdaBoostRegressor(n_estimators=30, learning_rate=1.0, loss='linear')
+    ada_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
+    ada_scores.append(np.mean(ada_score))
 
+print(ada_scores)
+
+# Bagging Regression, Extra Trees Regression, Gradient Boosting Regression
+from sklearn.ensemble import BaggingRegressor, ExtraTreesRegressor, GradientBoostingRegressor
+bagging_scores = []
+extra_scores = []
+gradient_scores = []
+for param in params:
+    clf = BaggingRegressor(n_estimators=30, max_samples=1.0, max_features=1.0)
+    bagging_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
+    bagging_scores.append(np.mean(bagging_score))
+    clf = ExtraTreesRegressor(n_estimators=30, max_depth=param)
+    extra_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
+    extra_scores.append(np.mean(extra_score))
+    clf = GradientBoostingRegressor(n_estimators=30, max_depth=param)
+    gradient_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
+    gradient_scores.append(np.mean(gradient_score))
+
+print(bagging_scores)
+print(extra_scores)
+print(gradient_scores)
+
+# Linear regression
+from sklearn.linear_model import LinearRegression
+linear_scores = []
+for param in params:
+    clf = LinearRegression()
+    linear_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
+    linear_scores.append(np.mean(linear_score))
+
+print(linear_scores)
+
+# SVM
+from sklearn import svm
+svm_scores = []
+for param in params:
+    clf = svm.SVR(kernel='linear')
+    svm_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
+    svm_scores.append(np.mean(svm_score))
+
+print(svm_scores)
