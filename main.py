@@ -1,20 +1,36 @@
 # import necessary library
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier, BaggingRegressor
 from nltk.stem.snowball import SnowballStemmer
-import os
+import nltk
+from nltk.tokenize import word_tokenize
 import Levenshtein
+
+# gensim
 from gensim.utils import tokenize
 from gensim.corpora.dictionary import Dictionary
 from gensim.models.tfidfmodel import TfidfModel
 from gensim.similarities import MatrixSimilarity
-import nltk
-from nltk.tokenize import word_tokenize
 from gensim.models.word2vec import Word2Vec
+
+# sklearn
 from scipy import spatial
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import AdaBoostRegressor
+from sklearn.ensemble import BaggingRegressor, ExtraTreesRegressor, GradientBoostingRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn import svm
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.linear_model import RidgeCV
+from sklearn.neural_network import MLPRegressor
 from sklearn.model_selection import cross_val_score
+
+# XGB Boost
+from xgboost import XGBRegressor
+import xgboost as xgb
+
+
 
 # Step 1: read data
 
@@ -69,6 +85,7 @@ df_train['dist_in_title'] = df_train.apply(lambda x:Levenshtein.ratio(x['search_
 df_train['dist_in_desc'] = df_train.apply(lambda x:Levenshtein.ratio(x['search_term'],x['product_description']), axis=1)
 # Combine product title and product description as all texts
 df_train['all_texts'] = df_train['product_title'] + ' . ' + df_train['product_description'] + ' . '
+
 df_test['dist_in_title'] = df_test.apply(lambda x:Levenshtein.ratio(x['search_term'],x['product_title']), axis=1)
 # Levenshtein distance between search term and product description
 df_test['dist_in_desc'] = df_test.apply(lambda x:Levenshtein.ratio(x['search_term'],x['product_description']), axis=1)
@@ -125,6 +142,8 @@ df_test['tfidf_cos_sim_in_title'] = df_test.apply(lambda x: cos_sim(x['search_te
 # Calculate similarity between search terms and product description
 df_train['tfidf_cos_sim_in_desc'] = df_train.apply(lambda x: cos_sim(x['search_term'], x['product_description']), axis=1)
 df_test['tfidf_cos_sim_in_desc'] = df_test.apply(lambda x: cos_sim(x['search_term'], x['product_description']), axis=1)
+
+
 # Load nltk tokenizer
 tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
 # Convert all texts into a list of sentences, and then convert to be a list of words
@@ -188,13 +207,13 @@ df_test = df_test.drop(['search_term','product_title','product_description','all
 # Get the training dataset and testing dataset
 # df_train.to_pickle('df_train.pkl')
 # df_test.to_pickle('df_test.pkl')
-df_train = pd.read_pickle('df_train.pkl')
-df_test = pd.read_pickle('df_test.pkl')
+# df_train = pd.read_pickle('df_train.pkl')
+# df_test = pd.read_pickle('df_test.pkl')
 
 # Split another training dataset and drop unnecessary columns
 y_train = df_train['relevance'].values
 X_train = df_train.drop(['id', 'relevance'], axis=1).values
-X_test = df_test.drop(['id'], axis = 1).values
+X_test = df_test.drop(['id'], axis=1).values
 
 
 xgb_params0={'colsample_bytree': 1, 'silent': 1, 'nthread': 8, 'min_child_weight': 10,
@@ -204,19 +223,20 @@ xgb_params1={'colsample_bytree': 0.77, 'silent': 1, 'nthread': 8, 'min_child_wei
     'n_estimators': 500, 'subsample': 0.77, 'learning_rate': 0.035, 'objective': 'reg:linear',
     'seed': 11, 'max_depth': 6, 'gamma': 0.2}
 
-# use models from sklearn: RandomForest <-- change to other model from here
+# use models from sklearn: RandomForest
 params = [1,3,5,6,7,8,9,10]
-test_scores = []
+rf_scores = []
 for param in params:
-    clf = RandomForestRegressor(n_estimators=30, max_depth=param)
+    clf = RandomForestRegressor(n_estimators=500, max_depth=param, min_samples_leaf=6, max_features=0.9, min_samples_split=1.0, n_jobs=-1, random_state=2018)
     test_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
-    test_scores.append(np.mean(test_score))
+    rf_scores.append(np.mean(test_score))
 
+rf_scores
 # generate predictions
 # Record testing id
 test_ids = df_test['id']
 # rf = RandomForestRegressor(n_estimators=128, max_depth=15)
-rf = RandomForestRegressor(n_estimators=500, max_depth=5, min_samples_leaf=6, max_features=0.9, min_samples_split=1.0, n_jobs=-1, random_state=2014)
+rf = RandomForestRegressor(n_estimators=500, max_depth=5, min_samples_leaf=6, max_features=0.9, min_samples_split=1.0, n_jobs=-1, random_state=2018)
 rf.fit(X_train, y_train)
 y_pred = rf.predict(X_test)
 for i in range(len(y_pred)):
@@ -225,12 +245,11 @@ for i in range(len(y_pred)):
 pd.DataFrame({"id": test_ids, "relevance": y_pred}).to_csv('outputs/RF_outputs.csv',index=False)
 
 # AdaBoost
-from sklearn.ensemble import AdaBoostRegressor
+
 ada_scores = []
-for param in params:
-    clf = AdaBoostRegressor(n_estimators=30, learning_rate=1.0, loss='linear')
-    ada_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
-    ada_scores.append(np.mean(ada_score))
+clf = AdaBoostRegressor(base_estimator=None, n_estimators=300, learning_rate=0.03, loss='linear', random_state=20180525)
+ada_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
+ada_scores.append(np.mean(ada_score))
 
 print(ada_scores)
 
@@ -242,35 +261,33 @@ for i in range(len(y_pred)):
         y_pred[i] = 3
 pd.DataFrame({"id": test_ids, "relevance": y_pred}).to_csv('outputs/AB_outputs.csv',index=False)
 
-# Bagging Regression, Extra Trees Regression, Gradient Boosting Regression
-from sklearn.ensemble import BaggingRegressor, ExtraTreesRegressor, GradientBoostingRegressor
-bagging_scores = []
-extra_scores = []
-gradient_scores = []
-for param in params:
-    clf = BaggingRegressor(n_estimators=30, max_samples=1.0, max_features=1.0)
-    bagging_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
-    bagging_scores.append(np.mean(bagging_score))
-    clf = ExtraTreesRegressor(n_estimators=30, max_depth=param)
-    extra_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
-    extra_scores.append(np.mean(extra_score))
-    clf = GradientBoostingRegressor(n_estimators=30, max_depth=param)
-    gradient_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
-    gradient_scores.append(np.mean(gradient_score))
+# Bagging Regression
 
-print(bagging_scores)
-print(extra_scores)
-print(gradient_scores)
+bagging_scores = []
+clf = BaggingRegressor(base_estimator=xgb.XGBRegressor(**xgb_params1), n_estimators=10, random_state=np.random.RandomState(2018))
+bagging_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
+bagging_scores.append(np.mean(bagging_score))
+bagging_scores
 
 # bag = BaggingRegressor(n_estimators=300, max_samples=1.0, max_features=1.0)
-import xgboost as xgb
-bag = BaggingRegressor(base_estimator=xgb.XGBRegressor(**xgb_params1), n_estimators=10, random_state=np.random.RandomState(2016))
+bag = BaggingRegressor(base_estimator=xgb.XGBRegressor(**xgb_params1), n_estimators=10, random_state=np.random.RandomState(2018))
 bag.fit(X_train, y_train)
 y_pred = bag.predict(X_test)
 for i in range(len(y_pred)):
     if y_pred[i] > 3:
         y_pred[i] = 3
+    if y_pred[i] < 1:
+        y_pred[i] = 1
 pd.DataFrame({"id": test_ids, "relevance": y_pred}).to_csv('outputs/Bag_outputs.csv',index=False)
+
+# Extra Trees Regression
+extra_scores = []
+for param in params:
+    clf = ExtraTreesRegressor(n_estimators=300, max_depth=param)
+    extra_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
+    extra_scores.append(np.mean(extra_score))
+
+extra_scores
 
 et = ExtraTreesRegressor(n_estimators=300, max_depth=16)
 et.fit(X_train, y_train)
@@ -278,7 +295,17 @@ y_pred = et.predict(X_test)
 for i in range(len(y_pred)):
     if y_pred[i] > 3:
         y_pred[i] = 3
+    if y_pred[i] < 1:
+        y_pred[i] = 1
 pd.DataFrame({"id": test_ids, "relevance": y_pred}).to_csv('outputs/ET_outputs.csv',index=False)
+
+# Gradient Boosting Regression
+gradient_scores = []
+for param in params:
+    clf = GradientBoostingRegressor(n_estimators=500, max_depth=param, min_samples_split=2, min_samples_leaf=15, learning_rate=0.035, loss='ls',random_state=10)
+    gradient_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
+    gradient_scores.append(np.mean(gradient_score))
+
 
 # gb = GradientBoostingRegressor(n_estimators=128, max_depth=16)
 gb = GradientBoostingRegressor(n_estimators=500, max_depth=6, min_samples_split=2, min_samples_leaf=15, learning_rate=0.035, loss='ls',random_state=10)
@@ -292,12 +319,10 @@ for i in range(len(y_pred)):
 pd.DataFrame({"id": test_ids, "relevance": y_pred}).to_csv('outputs/GB_outputs.csv',index=False)
 
 # Linear regression
-from sklearn.linear_model import LinearRegression
 linear_scores = []
-for param in params:
-    clf = LinearRegression()
-    linear_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
-    linear_scores.append(np.mean(linear_score))
+clf = LinearRegression()
+linear_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
+linear_scores.append(np.mean(linear_score))
 
 print(linear_scores)
 
@@ -307,16 +332,16 @@ y_pred = lr.predict(X_test)
 for i in range(len(y_pred)):
     if y_pred[i] > 3:
         y_pred[i] = 3
+    if y_pred[i] < 1:
+        y_pred[i] = 1
 pd.DataFrame({"id": test_ids, "relevance": y_pred}).to_csv('outputs/LR_outputs.csv',index=False)
 
 
 # SVM
-from sklearn import svm
 svm_scores = []
-for param in params:
-    clf = svm.SVR(kernel='linear')
-    svm_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
-    svm_scores.append(np.mean(svm_score))
+clf = svm.SVR(kernel='linear')
+svm_score = np.sqrt(-cross_val_score(clf, X_train, y_train, cv=10, scoring='neg_mean_squared_error'))
+svm_scores.append(np.mean(svm_score))
 
 print(svm_scores)
 
@@ -329,7 +354,6 @@ for i in range(len(y_pred)):
 pd.DataFrame({"id": test_ids, "relevance": y_pred}).to_csv('outputs/SVM_outputs.csv',index=False)
 
 # Ridge
-from sklearn.linear_model import RidgeCV
 ridge = RidgeCV(cv=10)
 ridge.fit(X_train, y_train)
 y_pred = ridge.predict(X_test)
@@ -339,7 +363,6 @@ for i in range(len(y_pred)):
 pd.DataFrame({"id": test_ids, "relevance": y_pred}).to_csv('outputs/Ridge_outputs.csv',index=False)
 
 # MLP
-from sklearn.neural_network import MLPRegressor
 # mlp = MLPRegressor(solver='lbfgs', alpha=1e-5)
 mlp = MLPRegressor()
 mlp.fit(X_train, y_train)
@@ -352,7 +375,6 @@ for i in range(len(y_pred)):
 pd.DataFrame({"id": test_ids, "relevance": y_pred}).to_csv('outputs/MLP_outputs.csv',index=False)
 
 # XGB Boost
-from xgboost import XGBRegressor
 xgb = XGBRegressor(**xgb_params1)
 xgb.fit(X_train, y_train)
 y_pred = xgb.predict(X_test)
@@ -365,7 +387,6 @@ pd.DataFrame({"id": test_ids, "relevance": y_pred}).to_csv('outputs/XGB_outputs.
 
 
 # KNN
-from sklearn.neighbors import KNeighborsRegressor
 knn = KNeighborsRegressor(128,  weights="uniform", leaf_size=5)
 knn.fit(X_train, y_train)
 y_pred = knn.predict(X_test)
@@ -377,7 +398,6 @@ for i in range(len(y_pred)):
 pd.DataFrame({"id": test_ids, "relevance": y_pred}).to_csv('outputs/KNN_outputs.csv',index=False)
 
 # Decision Tree
-from sklearn.tree import DecisionTreeRegressor
 dec = DecisionTreeRegressor(criterion='mse', splitter='random', max_depth=4, min_samples_split=7, min_samples_leaf=30, min_weight_fraction_leaf=0.0, max_features='sqrt', random_state=None, max_leaf_nodes=None, presort=False)
 dec.fit(X_train, y_train)
 y_pred = dec.predict(X_test)
